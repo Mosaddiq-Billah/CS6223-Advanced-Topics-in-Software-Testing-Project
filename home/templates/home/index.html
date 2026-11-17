@@ -1,0 +1,242 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tinyville NPC Testbed</title>
+<style>
+  :root{
+    --bg:#f6f4ef; --panel:#ffffff; --ink:#2b2a28; --sub:#6b675f;
+    --line:#e4e0d6; --accent:#c96b4a; --accent2:#4a7c6f;
+    --tile:#efece2; --tile-line:#ddd8cb; --shadow:0 1px 3px rgba(0,0,0,.06);
+    --pass:#3f8a5f; --partial:#b98a2e; --fail:#b8433d;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1c1b19; --panel:#242320; --ink:#ece8df; --sub:#a39d8f;
+      --line:#3a382f; --accent:#e08a68; --accent2:#7fb3a3;
+      --tile:#2a2822; --tile-line:#3a372e; --shadow:0 1px 3px rgba(0,0,0,.3);
+      --pass:#5fb283; --partial:#d3a84a; --fail:#d86a63;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1c1b19; --panel:#242320; --ink:#ece8df; --sub:#a39d8f;
+    --line:#3a382f; --accent:#e08a68; --accent2:#7fb3a3;
+    --tile:#2a2822; --tile-line:#3a372e; --shadow:0 1px 3px rgba(0,0,0,.3);
+    --pass:#5fb283; --partial:#d3a84a; --fail:#d86a63;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-serif, Georgia, 'Iowan Old Style', serif;
+    min-height:100vh; padding:20px;
+  }
+  .wrap{max-width:1000px; margin:0 auto;}
+  header{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:14px;}
+  h1{font-size:1.3rem; margin:0; font-weight:600; letter-spacing:.2px;}
+  .sub{color:var(--sub); font-size:.82rem; margin-top:2px; max-width:640px;}
+  .clock{font-variant-numeric:tabular-nums; font-size:1rem; color:var(--accent);}
+  .layout{display:grid; grid-template-columns:1.3fr 1fr; gap:16px;}
+  @media (max-width:720px){ .layout{grid-template-columns:1fr;} }
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; box-shadow:var(--shadow);}
+  .controls{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;}
+  button{
+    font-family:inherit; font-size:.85rem; padding:7px 14px; border-radius:8px;
+    border:1px solid var(--line); background:var(--tile); color:var(--ink); cursor:pointer;
+  }
+  button.primary{background:var(--accent); color:#fff; border-color:var(--accent);}
+  button:disabled{opacity:.45; cursor:not-allowed;}
+  button:active:not(:disabled){transform:translateY(1px);}
+  label.sp{font-size:.78rem; color:var(--sub); display:flex; align-items:center; gap:6px;}
+  input[type=range]{width:90px;}
+  .map{
+    position:relative; width:100%; aspect-ratio:8/6;
+    display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(6,1fr);
+    border-radius:10px; overflow:hidden; border:1px solid var(--tile-line);
+  }
+  .cell{background:var(--tile); border:1px solid var(--tile-line);}
+  .loc{
+    position:absolute; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-size:.62rem; color:var(--sub); pointer-events:none; text-align:center; line-height:1.1;
+  }
+  .loc .ic{font-size:1.3rem;}
+  .agent{
+    position:absolute; width:11%; height:16.5%; display:flex; align-items:center; justify-content:center;
+    font-size:1.4rem; transition:left .5s ease, top .5s ease; filter:drop-shadow(0 1px 1px rgba(0,0,0,.25));
+  }
+  .agent.scout{opacity:.45; z-index:2;}
+  body.test-mode .agent.scout{opacity:1;}
+  body.test-mode .map{border-color:var(--accent2); box-shadow:0 0 0 2px var(--accent2) inset;}
+  .agent .bubble{
+    position:absolute; bottom:100%; left:50%; transform:translateX(-50%);
+    background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:3px 6px;
+    font-size:.62rem; white-space:nowrap; max-width:150px; overflow:hidden; text-overflow:ellipsis;
+    box-shadow:var(--shadow); color:var(--ink); font-family:ui-sans-serif,system-ui,sans-serif; z-index:3;
+  }
+  .legend{display:flex; gap:12px; margin-top:10px; font-size:.75rem; color:var(--sub); flex-wrap:wrap;}
+  h2{font-size:.85rem; text-transform:uppercase; letter-spacing:.06em; color:var(--sub); margin:0 0 8px;}
+  .agent-card{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px;}
+  .agent-card .name{font-weight:600; font-size:.95rem;}
+  .agent-card .status{font-size:.78rem; color:var(--sub); margin-top:2px;}
+  .log{
+    font-family:ui-sans-serif,system-ui,sans-serif; font-size:.78rem; max-height:280px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:6px; padding-right:4px;
+  }
+  .log .entry{border-left:2px solid var(--line); padding-left:8px;}
+  .log .entry .t{color:var(--sub); font-size:.68rem; margin-right:4px;}
+  .log .entry.talk{border-left-color:var(--accent);}
+  .log .entry.think{border-left-color:var(--accent2); font-style:italic; color:var(--sub);}
+  .log .entry.test{border-left-style:dashed; border-left-color:var(--accent2); font-family:ui-sans-serif,system-ui,sans-serif;}
+  .log .entry.test.talk{border-left-color:var(--accent);}
+  .log .entry.test.warn{border-left-color:var(--partial);}
+  .log::-webkit-scrollbar{width:6px;}
+  .log::-webkit-scrollbar-thumb{background:var(--tile-line); border-radius:3px;}
+  footer{margin-top:14px; font-size:.72rem; color:var(--sub); text-align:center;}
+
+  /* ---- testing dashboard ---- */
+  .test-panel{margin-top:16px; font-family:ui-sans-serif,system-ui,sans-serif;}
+  .test-panel h2{margin-top:14px;}
+  .test-panel h2:first-child{margin-top:0;}
+  .test-panel select, .test-panel input[type=number]{
+    font-family:inherit; font-size:.8rem; padding:4px 6px; border-radius:6px;
+    border:1px solid var(--line); background:var(--tile); color:var(--ink); max-width:280px;
+  }
+  .test-panel input[type=number]{width:52px;}
+  .test-grid{display:grid; grid-template-columns:1fr 1.4fr; gap:16px;}
+  @media (max-width:720px){ .test-grid{grid-template-columns:1fr;} }
+  dl.status{margin:0; display:grid; grid-template-columns:auto 1fr; gap:4px 10px; font-size:.8rem;}
+  dl.status dt{color:var(--sub);} dl.status dd{margin:0; word-break:break-word;}
+  table{border-collapse:collapse; width:100%; font-size:.75rem;}
+  th,td{text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); vertical-align:top;}
+  th{color:var(--sub); font-weight:600;}
+  td.ev{color:var(--sub); max-width:280px;}
+  .tablewrap{overflow-x:auto;}
+  #sheetTable th{white-space:nowrap; width:1%; padding-right:12px;}
+  .badge{display:inline-block; padding:1px 8px; border-radius:10px; font-size:.7rem; font-weight:600; color:#fff; background:var(--sub);}
+  .badge.PASS{background:var(--pass);} .badge.PARTIAL{background:var(--partial);}
+  .badge.FAIL{background:var(--fail);} .badge.ABORTED{background:var(--sub);}
+  .na{color:var(--sub); font-size:.75rem;}
+  .overall{display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:.85rem;}
+  .overall .badge{font-size:.85rem; padding:3px 12px;}
+  .log .entry.head{border-left-color:var(--accent); font-weight:600;}
+  .log .entry.pass{border-left-color:var(--pass);} .log .entry.warn{border-left-color:var(--partial);}
+  .log .entry.fail{border-left-color:var(--fail);} .log .entry.dim{color:var(--sub);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>🏘️ Tinyville NPC Testbed</h1>
+      <div class="sub">Automated scenario-driven black-box testing of NPC behaviour in a Smallville-inspired 2D sandbox
+        — normal / boundary / stress scenarios, four behavioural quality criteria, Pass / Partial / Fail outcomes.</div>
+    </div>
+    <div class="clock" id="clockDisplay">6:00 AM · Day 1</div>
+  </header>
+
+  <div class="layout">
+    <div class="panel">
+      <div class="controls">
+        <button class="primary" id="playBtn">▶ Play</button>
+        <button id="stepBtn">Step</button>
+        <button id="resetBtn">Restart</button>
+        <label class="sp">Speed <input type="range" id="speed" min="1" max="4" value="2"></label>
+      </div>
+      <div class="map" id="map"></div>
+      <div class="legend">
+        <span>🏪 Market</span><span>⛲ Square</span><span>📚 Library</span><span>🌳 Park</span>
+        <span>🧺 Sana</span><span>🧭 Theo</span><span>📖 Ivy</span><span>🤖 Scout (test NPC)</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="agent-card">
+        <div class="name">🧺 Sana — shopkeeper</div>
+        <div class="status" id="status-sana">waking up…</div>
+      </div>
+      <div class="agent-card">
+        <div class="name">🧭 Theo — guide</div>
+        <div class="status" id="status-theo">waking up…</div>
+      </div>
+      <div class="agent-card">
+        <div class="name">📖 Ivy — librarian</div>
+        <div class="status" id="status-ivy">waking up…</div>
+      </div>
+      <h2>Town log</h2>
+      <div class="log" id="townLog"></div>
+    </div>
+  </div>
+
+  <!-- ================== Automated NPC behavioural testing ================== -->
+  <section class="panel test-panel" id="testPanel">
+    <h2>🤖 Scenario-driven black-box NPC testing</h2>
+    <div class="controls">
+      <button class="primary" id="btnRunNormal">Run Normal</button>
+      <button class="primary" id="btnRunBoundary">Run Boundary</button>
+      <button class="primary" id="btnRunStress">Run Stress</button>
+      <button class="primary" id="btnRunAll">Run All</button>
+      <select id="scenarioSelect"></select>
+      <button id="btnRunOne">Run Scenario</button>
+      <button id="btnStop" disabled>Stop</button>
+    </div>
+    <div class="controls">
+      <label class="sp">Executions per scenario <input type="number" id="execCount" min="1" max="10" value="3"></label>
+      <label class="sp"><input type="checkbox" id="animateToggle" checked> animate test agent</label>
+      <label class="sp" title="Seeds a known behavioural fault into the NPCs (test mode only) to evaluate whether the criteria detect it">Inject fault <select id="faultSelect"></select></label>
+    </div>
+    <div class="controls">
+      <button id="btnCsvReport">⬇ Report CSV</button>
+      <button id="btnCsvSheets">⬇ Observation Sheets CSV</button>
+      <button id="btnCsvTrace">⬇ Behaviour Trace CSV</button>
+    </div>
+
+    <div class="test-grid">
+      <div>
+        <h2>Current run</h2>
+        <dl class="status">
+          <dt>Scenario</dt><dd id="stScenario">—</dd>
+          <dt>Test agent</dt><dd id="stActivity">idle</dd>
+          <dt>Target NPC</dt><dd id="stTarget">—</dd>
+          <dt>Action</dt><dd id="stAction">—</dd>
+        </dl>
+      </div>
+      <div>
+        <h2>Quality criteria (latest scenario)</h2>
+        <div class="overall">Outcome: <span id="outcomeBadge"><span class="na">—</span></span></div>
+        <div class="tablewrap"><table><thead><tr><th>Criterion</th><th>Status</th><th>Evidence / first issue</th></tr></thead>
+          <tbody id="criteriaTable"></tbody></table></div>
+      </div>
+    </div>
+
+    <h2>Observation sheet (latest execution, automated)</h2>
+    <div class="tablewrap"><table><tbody id="sheetTable">
+      <tr><td class="na">Run a scenario to generate an observation sheet.</td></tr>
+    </tbody></table></div>
+
+    <h2>Reports</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Run</th><th>Category</th><th>Target</th><th>Execs</th><th>Determ.</th><th>State</th><th>Role</th><th>Recovery</th><th>Outcome</th><th>Issues</th></tr></thead>
+      <tbody id="reportBody"></tbody></table></div>
+
+    <h2>Execution log</h2>
+    <div class="log" id="testLog"></div>
+  </section>
+
+  <footer>
+    Ambient town life is fully scripted (no language model). In test mode the simulation is frozen and NPC behaviour
+    runs on a deterministic virtual clock, so every scenario execution is exactly reproducible; injected faults exist
+    only in test mode and never affect the normal town.
+  </footer>
+</div>
+
+<!-- Load order = framework layers: SUT → observation → criteria (generic) → game spec → scenarios → execution → evaluation → dashboard -->
+<script src="{% static 'home/js/sandbox.js' %}"></script>
+<script src="{% static 'home/js/observation.js' %}"></script>
+<script src="{% static 'home/js/criteria.js' %}"></script>
+<script src="{% static 'home/js/game_spec.js' %}"></script>
+<script src="{% static 'home/js/scenarios.js' %}"></script>
+<script src="{% static 'home/js/execution.js' %}"></script>
+<script src="{% static 'home/js/evaluation.js' %}"></script>
+<script src="{% static 'home/js/dashboard.js' %}"></script>
+</body>
+</html>
